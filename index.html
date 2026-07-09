@@ -8,16 +8,6 @@
 <body>
     <h1>Test</h1>
     <ul id="fileList"></ul>
-    <script>
-        window.api.getGameFiles().then((files) => {
-            const fileList = document.getElementById("fileList");
-            files.forEach(file => {
-                const li = document.createElement("li");
-                li.textContent = file;
-                fileList.appendChild(li);
-            });
-        })
-        
-    </script>
+    
 </body>
 </html>
