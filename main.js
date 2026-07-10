@@ -3,8 +3,10 @@ const admZip = require('adm-zip');
 const fs = require('fs');
 const path = require('path');
 
-const modPath = "C:/Users/kubag/Documents/Mody Cyberpunk/Veegee Shop 2-13870-2-3-0-1747230324.zip";
+const gamePath = "D:/SteamLibrary/steamapps/common/Cyberpunk 2077"; // temp till gui has a selector
+const modPath = "C:/Users/kubag/Documents/Mody Cyberpunk/Baseball Cap Fem and Masc-16699-1-0-1726904383.zip"; // temp till gui has a selector
 const rootFolders = ["archive", "r6", "bin", "engine", "red4ext", "mods"];
+const modsDbPath = path.join(__dirname, 'mods.json');
 
 function createWindow() {
     const win = new BrowserWindow({
@@ -29,26 +31,62 @@ function getStripDepth(zipContents) {
     return -1;
 }
 
-function inspectModZip() {
-    const zip = new admZip(modPath);
-    const zipContents = zip.getEntries();
-    const stripDepth = getStripDepth(zipContents);
-    
-    zipContents.forEach(entry => {
-        const clean = getCleanPath(entry.entryName, stripDepth);
-        console.log(entry.entryName, "->", clean);
-    });
-}
-
 function getCleanPath(entryName, stripDepth) {
     return entryName.split('/').slice(stripDepth).join('/')
 }
 
-ipcMain.handle('getGameFiles', () => {
-    return listGameFiles();
-});
+function installMod(zipContents, stripDepth, gamePath) {
+    let installedFiles = [];
+
+    zipContents.forEach(entry => {
+        if (entry.isDirectory) {
+            return
+        }
+        const cleanPath = getCleanPath(entry.entryName, stripDepth);
+        if (cleanPath.length == 0) {
+            return
+        }
+        const finalPath = gamePath + '/' + cleanPath;
+        const folder = path.dirname(finalPath);
+        fs.mkdirSync(folder, { recursive: true }); 
+        const fileData = entry.getData();
+        fs.writeFileSync(finalPath, fileData);
+        installedFiles.push(cleanPath);
+    });
+    return installedFiles;
+}
+
+function saveModRecord(modName, installedFiles) {
+    if (!fs.existsSync(modsDbPath)) {
+        fs.writeFileSync(modsDbPath, '[]');
+    }
+    const rawText = fs.readFileSync(modsDbPath, 'utf-8');
+    const json = JSON.parse(rawText);
+    const record = {
+        name: modName,
+        installDate: new Date().toISOString(),
+        files: installedFiles 
+    }
+    json.push(record);
+    fs.writeFileSync(modsDbPath, JSON.stringify(json, null, 2))
+}
+
+function readModRecord() {
+    if (!fs.existsSync(modsDbPath)) {
+        return [];
+    }
+    const rawText = fs.readFileSync(modsDbPath, 'utf-8');
+    const json = JSON.parse(rawText);
+    return json;
+}
 
 app.whenReady().then(() => {
     createWindow();
-    inspectModZip();
+
+    const zip = new admZip(modPath);
+    const zipContents = zip.getEntries();
+    const stripDepth = getStripDepth(zipContents);
+    const installedFiles = installMod(zipContents, stripDepth, gamePath);
+    saveModRecord("basketball cap for masc/fem V", installedFiles);
+    console.log(installedFiles);
 });

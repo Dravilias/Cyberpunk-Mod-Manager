@@ -26,3 +26,6 @@ Thumbs.db
 temp/
 tmp/
 extracted/
+
+# data
+mods.json
