@@ -71,13 +71,29 @@ function saveModRecord(modName, installedFiles) {
     fs.writeFileSync(modsDbPath, JSON.stringify(json, null, 2))
 }
 
-function readModRecord() {
+function readModRecords() {
     if (!fs.existsSync(modsDbPath)) {
         return [];
     }
     const rawText = fs.readFileSync(modsDbPath, 'utf-8');
     const json = JSON.parse(rawText);
     return json;
+}
+
+function deleteModRecord(modName, gamePath) {
+    const modRecords = readModRecords();
+    const targetMod = modRecords.find(modRecord => modRecord.name === modName);
+    if (targetMod == null) {
+        return 
+    }
+    targetMod.files.forEach(file => {
+        const fullPath = gamePath + '/' + file;
+        if (fs.existsSync(fullPath)) {
+            fs.unlinkSync(fullPath);
+        }
+    });
+    const remainingMods = modRecords.filter(modRecord => modRecord.name !== modName);
+    fs.writeFileSync(modsDbPath, JSON.stringify(remainingMods, null, 2))
 }
 
 app.whenReady().then(() => {
@@ -87,6 +103,6 @@ app.whenReady().then(() => {
     const zipContents = zip.getEntries();
     const stripDepth = getStripDepth(zipContents);
     const installedFiles = installMod(zipContents, stripDepth, gamePath);
-    saveModRecord("basketball cap for masc/fem V", installedFiles);
+    deleteModRecord("basketball cap for masc/fem V", gamePath);
     console.log(installedFiles);
 });
