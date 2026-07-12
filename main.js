@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const admZip = require('adm-zip');
 const fs = require('fs');
 const path = require('path');
@@ -96,13 +96,29 @@ function deleteModRecord(modName, gamePath) {
     fs.writeFileSync(modsDbPath, JSON.stringify(remainingMods, null, 2))
 }
 
-app.whenReady().then(() => {
-    createWindow();
+ipcMain.handle('selectModZip', () => {
+    const result = dialog.showOpenDialogSync({
+        properties: ['openFile'],
+        filters: [{ name: 'Zip Archives', extensions: ['zip'] }]
+    });
+    if (!result) {
+        return null
+    };
+    return result[0];
+})
 
-    const zip = new admZip(modPath);
+
+ipcMain.handle('installModFromPath', (event, zipPath) => {
+    const zip = new admZip(zipPath);
     const zipContents = zip.getEntries();
     const stripDepth = getStripDepth(zipContents);
     const installedFiles = installMod(zipContents, stripDepth, gamePath);
-    deleteModRecord("basketball cap for masc/fem V", gamePath);
-    console.log(installedFiles);
+    const rawName = path.basename(zipPath, '.zip')
+    const cleanName = rawName.replace(/-\d.*$/, '')
+    saveModRecord(cleanName, installedFiles);
+    return cleanName;
+})
+app.whenReady().then(() => {
+    createWindow();
+    
 });

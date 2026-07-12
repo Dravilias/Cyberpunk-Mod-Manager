@@ -1,5 +1,6 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
-    // future stuff here 
+    selectModZip: () => ipcRenderer.invoke('selectModZip'),
+    installModFromPath: (zipPath) => ipcRenderer.invoke('installModFromPath', zipPath)
 });
