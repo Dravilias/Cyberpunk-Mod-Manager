@@ -7,17 +7,44 @@
 </head>
 <body>
     <button id="filePicker">Choose mod zip archive</button>
+    <ul id="modList">
+
+    </ul>
     <script>
         const filePicker = document.getElementById("filePicker");
+        const modList = document.getElementById("modList");
 
         filePicker.addEventListener("click", () => {
             window.api.selectModZip().then((path) => {
                 if (!path) return;
                 window.api.installModFromPath(path).then((modName) => {
                     console.log("Installed:", modName);
+                    renderModList();
                 });
             });
+            
         });
+
+        function renderModList() {
+            modList.innerHTML = "";
+            window.api.getInstalledMods().then( records => 
+                records.forEach(record => {
+                    const li = document.createElement("li")
+                    li.textContent = record.name;
+                    const button = document.createElement("button");
+                    button.textContent = "Delete";
+                    button.addEventListener("click", () => {
+                        console.log("button clicked for", record.name);
+                        window.api.deleteMod(record.name).then(() => {
+                            renderModList()
+                        })
+                    })
+                    li.appendChild(button);
+                    modList.appendChild(li)
+                })
+            )
+        }
+        renderModList()
     </script>
 </body>
 </html>

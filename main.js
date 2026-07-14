@@ -107,7 +107,6 @@ ipcMain.handle('selectModZip', () => {
     return result[0];
 })
 
-
 ipcMain.handle('installModFromPath', (event, zipPath) => {
     const zip = new admZip(zipPath);
     const zipContents = zip.getEntries();
@@ -118,6 +117,15 @@ ipcMain.handle('installModFromPath', (event, zipPath) => {
     saveModRecord(cleanName, installedFiles);
     return cleanName;
 })
+
+ipcMain.handle('getInstalledMods', () => {
+    return readModRecords();
+})
+
+ipcMain.handle('deleteMod', (event, modName) => {
+    deleteModRecord(modName, gamePath);
+});
+
 app.whenReady().then(() => {
     createWindow();
     
