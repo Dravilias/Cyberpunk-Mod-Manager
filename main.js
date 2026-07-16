@@ -98,13 +98,13 @@ function deleteModRecord(modName, gamePath) {
 
 ipcMain.handle('selectModZip', () => {
     const result = dialog.showOpenDialogSync({
-        properties: ['openFile'],
+        properties: ['openFile', 'multiSelections'],
         filters: [{ name: 'Zip Archives', extensions: ['zip'] }]
     });
     if (!result) {
         return null
     };
-    return result[0];
+    return result;
 })
 
 ipcMain.handle('installModFromPath', (event, zipPath) => {
