@@ -3,48 +3,642 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Test</title>
+    <title>Cyberpunk Mod Manager</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400;1,700&family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0c0c0e;
+            --bg-elevated: #141418;
+            --bg-card: #1a1a20;
+            --border: #2a2a30;
+            --border-light: #3a3a42;
+            --text-primary: #e8e4dc;
+            --text-secondary: #8a8580;
+            --text-muted: #5a5550;
+            --accent-red: #e85d5d;
+            --accent-red-dim: #c44a4a;
+            --accent-amber: #d4a853;
+            --accent-amber-dim: #b08d42;
+            --accent-green: #5db87a;
+            --accent-blue: #5d8de8;
+            --font-display: 'Space Grotesk', sans-serif;
+            --font-accent: 'Playfair Display', serif;
+            --font-mono: 'JetBrains Mono', monospace;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background: var(--bg);
+            color: var(--text-primary);
+            font-family: var(--font-display);
+            min-height: 100vh;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* === TICKER BAR === */
+        .ticker {
+            background: var(--bg-elevated);
+            border-bottom: 1px solid var(--border);
+            padding: 8px 0;
+            overflow: hidden;
+            white-space: nowrap;
+        }
+        .ticker-track {
+            display: inline-flex;
+            animation: ticker-scroll 30s linear infinite;
+            gap: 0;
+        }
+        .ticker:hover .ticker-track { animation-play-state: paused; }
+        .ticker-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 0 24px;
+            font-family: var(--font-mono);
+            font-size: 11px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+        }
+        .ticker-item .dot {
+            width: 4px; height: 4px;
+            background: var(--accent-red);
+            border-radius: 50%;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        .ticker-item .code { color: var(--text-primary); font-weight: 500; }
+        .ticker-item .time { color: var(--accent-amber); }
+
+        @keyframes ticker-scroll {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        /* === NAV === */
+        .nav {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 20px 48px;
+            border-bottom: 1px solid var(--border);
+        }
+        .nav-brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 700;
+            font-size: 16px;
+            letter-spacing: 0.04em;
+        }
+        .nav-brand .logo {
+            width: 20px; height: 20px;
+            background: var(--accent-red);
+            transform: rotate(45deg);
+            display: flex; align-items: center; justify-content: center;
+        }
+        .nav-brand .logo::after {
+            content: '';
+            width: 8px; height: 8px;
+            background: var(--bg);
+            transform: rotate(0deg);
+        }
+        .nav-issue {
+            font-family: var(--font-accent);
+            font-style: italic;
+            font-size: 13px;
+            color: var(--text-secondary);
+            letter-spacing: 0.02em;
+        }
+        .nav-links {
+            display: flex;
+            gap: 32px;
+            list-style: none;
+        }
+        .nav-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 12px;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            transition: color 0.2s;
+        }
+        .nav-links a:hover { color: var(--text-primary); }
+
+        /* === HERO === */
+        .hero {
+            padding: 80px 48px 60px;
+            position: relative;
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 60px;
+            align-items: start;
+        }
+        .hero-main { max-width: 640px; }
+        .hero-meta {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 32px;
+            font-family: var(--font-mono);
+            font-size: 11px;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+        }
+        .hero-meta .live-dot {
+            width: 6px; height: 6px;
+            background: var(--accent-green);
+            border-radius: 50%;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        .hero-meta .sep { color: var(--text-muted); }
+
+        .hero h1 {
+            font-family: var(--font-display);
+            font-size: clamp(48px, 6vw, 84px);
+            font-weight: 700;
+            line-height: 0.95;
+            letter-spacing: -0.02em;
+            margin-bottom: 8px;
+        }
+        .hero h1 .accent {
+            font-family: var(--font-accent);
+            font-style: italic;
+            font-weight: 400;
+            color: var(--accent-red);
+            display: block;
+            margin-top: 4px;
+        }
+        .hero-version {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 24px;
+            font-family: var(--font-mono);
+            font-size: 14px;
+            letter-spacing: 0.15em;
+            color: var(--accent-amber);
+        }
+        .hero-version .arrow {
+            display: inline-block;
+            transition: transform 0.3s;
+        }
+        .hero-version:hover .arrow { transform: translate(4px, -4px); }
+
+        .hero-desc {
+            margin-top: 40px;
+            font-family: var(--font-accent);
+            font-size: 16px;
+            line-height: 1.7;
+            color: var(--text-secondary);
+            max-width: 420px;
+        }
+
+        /* === STAMP CARD === */
+        .stamp-card {
+            width: 220px;
+            border: 2px solid var(--accent-red-dim);
+            padding: 24px 20px;
+            position: relative;
+            transform: rotate(-3deg);
+            background: transparent;
+        }
+        .stamp-card::before {
+            content: '';
+            position: absolute;
+            inset: 4px;
+            border: 1px solid var(--accent-red-dim);
+            opacity: 0.5;
+        }
+        .stamp-card .stamp-label {
+            font-family: var(--font-mono);
+            font-size: 10px;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            color: var(--accent-amber);
+            text-align: center;
+            margin-bottom: 8px;
+        }
+        .stamp-card .stamp-title {
+            font-family: var(--font-display);
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--accent-red);
+            text-align: center;
+            letter-spacing: 0.04em;
+            line-height: 1;
+            margin-bottom: 8px;
+        }
+        .stamp-card .stamp-sub {
+            font-family: var(--font-mono);
+            font-size: 9px;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            text-align: center;
+            border-top: 1px solid var(--accent-red-dim);
+            border-bottom: 1px solid var(--accent-red-dim);
+            padding: 6px 0;
+            margin-bottom: 12px;
+        }
+        .stamp-card .stamp-meta {
+            font-family: var(--font-mono);
+            font-size: 10px;
+            color: var(--text-secondary);
+            text-align: center;
+            line-height: 1.8;
+        }
+
+        /* === INSTALL BAR === */
+        .install-bar {
+            padding: 0 48px 40px;
+        }
+        .install-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            background: transparent;
+            border: 1px solid var(--border-light);
+            color: var(--text-primary);
+            padding: 14px 28px;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .install-btn:hover {
+            border-color: var(--accent-red);
+            color: var(--accent-red);
+            box-shadow: 0 0 20px rgba(232, 93, 93, 0.1);
+        }
+        .install-btn .plus {
+            font-size: 16px;
+            color: var(--accent-red);
+        }
+
+        /* === TABLE === */
+        .table-wrap {
+            padding: 0 48px 80px;
+        }
+        .table-header {
+            display: grid;
+            grid-template-columns: 100px 2fr 120px 100px 140px 80px;
+            gap: 16px;
+            padding: 16px 0;
+            border-top: 1px solid var(--border-light);
+            border-bottom: 1px solid var(--border-light);
+            font-family: var(--font-mono);
+            font-size: 10px;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+        .mod-row {
+            display: grid;
+            grid-template-columns: 100px 2fr 120px 100px 140px 80px;
+            gap: 16px;
+            padding: 20px 0;
+            border-bottom: 1px solid var(--border);
+            align-items: center;
+            position: relative;
+            transition: all 0.3s;
+        }
+        .mod-row::before {
+            content: '';
+            position: absolute;
+            left: -48px;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            background: transparent;
+            transition: background 0.3s;
+        }
+        .mod-row:hover {
+            background: var(--bg-elevated);
+        }
+        .mod-row:hover::before {
+            background: var(--accent-red);
+        }
+        .mod-row .mod-icon {
+            width: 36px; height: 36px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            display: flex; align-items: center; justify-content: center;
+            font-family: var(--font-mono);
+            font-size: 14px;
+            color: var(--accent-amber);
+        }
+        .mod-row .mod-name {
+            font-family: var(--font-display);
+            font-size: 20px;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+        }
+        .mod-row .mod-name .mod-version {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--text-muted);
+            font-weight: 400;
+            margin-left: 8px;
+        }
+        .mod-row .mod-name .mod-desc {
+            display: block;
+            font-family: var(--font-accent);
+            font-size: 13px;
+            font-style: italic;
+            color: var(--text-secondary);
+            font-weight: 400;
+            margin-top: 2px;
+        }
+        .mod-row .mod-author {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+        .mod-row .mod-size {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+        .mod-row .mod-status {
+            display: inline-flex;
+            padding: 6px 14px;
+            font-family: var(--font-mono);
+            font-size: 10px;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            border: 1px solid;
+        }
+        .mod-row .mod-status.active {
+            color: var(--accent-green);
+            border-color: var(--accent-green);
+            background: rgba(93, 184, 122, 0.08);
+        }
+        .mod-row .mod-status.pending {
+            color: var(--accent-amber);
+            border-color: var(--accent-amber);
+            background: rgba(212, 168, 83, 0.08);
+        }
+        .mod-row .mod-status.error {
+            color: var(--accent-red);
+            border-color: var(--accent-red);
+            background: rgba(232, 93, 93, 0.08);
+        }
+        .mod-row .mod-action {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: color 0.2s;
+            background: none;
+            border: none;
+            text-decoration: underline;
+            text-underline-offset: 3px;
+        }
+        .mod-row .mod-action:hover {
+            color: var(--accent-red);
+        }
+
+        /* === EMPTY STATE === */
+        .empty-state {
+            text-align: center;
+            padding: 80px 48px;
+            color: var(--text-muted);
+            font-family: var(--font-accent);
+            font-style: italic;
+            font-size: 18px;
+        }
+
+        /* === FOOTER === */
+        .footer {
+            border-top: 1px solid var(--border);
+            padding: 24px 48px;
+            display: flex;
+            justify-content: space-between;
+            font-family: var(--font-mono);
+            font-size: 10px;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        /* === ANIMATIONS === */
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .hero-main > * { animation: fadeInUp 0.6s ease-out forwards; opacity: 0; }
+        .hero-main > *:nth-child(1) { animation-delay: 0.1s; }
+        .hero-main > *:nth-child(2) { animation-delay: 0.2s; }
+        .hero-main > *:nth-child(3) { animation-delay: 0.3s; }
+        .hero-main > *:nth-child(4) { animation-delay: 0.4s; }
+        .stamp-card { animation: fadeInUp 0.6s ease-out 0.5s forwards; opacity: 0; }
+
+        /* === RESPONSIVE === */
+        @media (max-width: 900px) {
+            .hero { grid-template-columns: 1fr; }
+            .stamp-card { display: none; }
+            .table-header, .mod-row {
+                grid-template-columns: 60px 1fr 80px 60px;
+            }
+            .table-header > :nth-child(3),
+            .table-header > :nth-child(5),
+            .mod-row > :nth-child(4),
+            .mod-row > :nth-child(6) { display: none; }
+            .nav { flex-wrap: wrap; gap: 12px; }
+            .nav-issue { display: none; }
+        }
+    </style>
+<base target="_blank">
 </head>
 <body>
-    <button id="filePicker">Choose mod zip archive</button>
-    <ul id="modList"></ul>
-    <script>
-        const filePicker = document.getElementById("filePicker");
-        const modList = document.getElementById("modList");
 
-        function renderModList() {
-            modList.innerHTML = "";
-            window.api.getInstalledMods().then( records => 
-                records.forEach(record => {
-                    const li = document.createElement("li")
-                    li.textContent = record.name + " ";
-                    const button = document.createElement("button");
-                    button.textContent = "Delete";
-                    button.addEventListener("click", () => {
-                        console.log("button clicked for", record.name);
-                        window.api.deleteMod(record.name).then(() => {
-                            renderModList()
-                        })
-                    })
-                    li.appendChild(button);
-                    modList.appendChild(li)
-                })
-            )
-        }
-        renderModList()
+<!-- TICKER BAR -->
+<div class="ticker">
+    <div class="ticker-track">
+        <div class="ticker-item"><span class="dot"></span><span class="code">ARC</span> Archive Engine <span class="time">v2.4.1</span></div>
+        <div class="ticker-item"><span class="dot"></span><span class="code">RED</span> RedEngine <span class="time">4.0</span></div>
+        <div class="ticker-item"><span class="dot"></span><span class="code">CET</span> Cyber Engine Tweaks <span class="time">v1.32</span></div>
+        <div class="ticker-item"><span class="dot"></span><span class="code">RED4</span> Red4Ext <span class="time">v1.24</span></div>
+        <div class="ticker-item"><span class="dot"></span><span class="code">ARC</span> Archive Engine <span class="time">v2.4.1</span></div>
+        <div class="ticker-item"><span class="dot"></span><span class="code">RED</span> RedEngine <span class="time">4.0</span></div>
+        <div class="ticker-item"><span class="dot"></span><span class="code">CET</span> Cyber Engine Tweaks <span class="time">v1.32</span></div>
+        <div class="ticker-item"><span class="dot"></span><span class="code">RED4</span> Red4Ext <span class="time">v1.24</span></div>
+    </div>
+</div>
 
-        
-        filePicker.addEventListener("click", async () => {
-            const paths = await window.api.selectModZip();
-            if (!paths) return;
+<!-- NAV -->
+<nav class="nav">
+    <div class="nav-brand">
+        <div class="logo"></div>
+        <span>CYBERPUNK MOD MANAGER</span>
+    </div>
+    <span class="nav-issue">Build 2077 &middot; Night City Edition</span>
+    <ul class="nav-links">
+        <li><a href="#">Mods</a></li>
+        <li><a href="#">Load Order</a></li>
+        <li><a href="#">Settings</a></li>
+        <li><a href="#">About</a></li>
+    </ul>
+</nav>
 
-            for (const path of paths) {
-                await window.api.installModFromPath(path);
-                console.log("installed " + path);
+<!-- HERO -->
+<section class="hero">
+    <div class="hero-main">
+        <div class="hero-meta">
+            <span class="live-dot"></span>
+            <span>Live &middot; Mod Registry</span>
+            <span class="sep">&middot;</span>
+            <span id="modCount">0 Installed</span>
+        </div>
+        <h1>
+            Manage your mods.
+            <span class="accent">We'll handle the rest.</span>
+        </h1>
+        <div class="hero-version">
+            <span class="arrow">&rarr;</span>
+            <span>VOL. 14</span>
+        </div>
+        <p class="hero-desc">
+            A lightweight mod manager for Cyberpunk 2077. Install from zip archives,
+            track every file, remove safely &mdash; no orphaned data left behind in Night City.
+        </p>
+    </div>
+    <div class="stamp-card">
+        <div class="stamp-label">Departing</div>
+        <div class="stamp-title">TUESDAY</div>
+        <div class="stamp-sub">Installed in Night City</div>
+        <div class="stamp-meta">
+            VOL. 14<br>
+            06.MAY.26
+        </div>
+    </div>
+</section>
+
+<!-- INSTALL BAR -->
+<div class="install-bar">
+    <button class="install-btn" id="filePicker">
+        <span class="plus">+</span>
+        <span>Install Mod from Archive</span>
+    </button>
+</div>
+
+<!-- TABLE -->
+<div class="table-wrap">
+    <div class="table-header">
+        <span></span>
+        <span>Mod Name</span>
+        <span>Author</span>
+        <span>Size</span>
+        <span>Status</span>
+        <span></span>
+    </div>
+    <div id="modList"></div>
+</div>
+
+<!-- FOOTER -->
+<footer class="footer">
+    <span>Cyberpunk 2077 Mod Manager</span>
+    <span>GPL-3.0 &middot; Open Source</span>
+</footer>
+
+<script>
+    const filePicker = document.getElementById("filePicker");
+    const modList = document.getElementById("modList");
+    const modCount = document.getElementById("modCount");
+
+    function formatSize(bytes) {
+        if (bytes === 0) return "0 B";
+        const k = 1024;
+        const sizes = ["B", "KB", "MB", "GB"];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+    }
+
+    function getStatusClass(status) {
+        if (status === "active" || status === "installed") return "active";
+        if (status === "pending" || status === "installing") return "pending";
+        return "error";
+    }
+
+    function getInitials(name) {
+        return name.split(/\s+/).map(w => w[0]).join("").substring(0, 3).toUpperCase();
+    }
+
+    function renderModList() {
+        modList.innerHTML = "";
+
+        window.api.getInstalledMods().then(records => {
+            modCount.textContent = records.length + " Installed";
+
+            if (records.length === 0) {
+                modList.innerHTML = '<div class="empty-state">No mods installed. Add your first archive above.</div>';
+                return;
             }
 
-            renderModList();
+            records.forEach(record => {
+                const row = document.createElement("div");
+                row.className = "mod-row";
+
+                const statusClass = getStatusClass(record.status || "active");
+                const sizeStr = record.size ? formatSize(record.size) : "&mdash;";
+                const authorStr = record.author || "Unknown";
+                const versionStr = record.version || "";
+                const descStr = record.description || "";
+
+                row.innerHTML = `
+                    <div class="mod-icon">${getInitials(record.name)}</div>
+                    <div class="mod-name">
+                        ${record.name}
+                        ${versionStr ? '<span class="mod-version">' + versionStr + '</span>' : ''}
+                        ${descStr ? '<span class="mod-desc">' + descStr + '</span>' : ''}
+                    </div>
+                    <div class="mod-author">${authorStr}</div>
+                    <div class="mod-size">${sizeStr}</div>
+                    <div class="mod-status ${statusClass}">${record.status || "active"}</div>
+                    <button class="mod-action">Remove</button>
+                `;
+
+                const deleteBtn = row.querySelector(".mod-action");
+                deleteBtn.addEventListener("click", () => {
+                    console.log("Removing mod:", record.name);
+                    window.api.deleteMod(record.name).then(() => {
+                        renderModList();
+                    });
+                });
+
+                modList.appendChild(row);
+            });
+        }).catch(err => {
+            console.error("Failed to load mods:", err);
+            modList.innerHTML = '<div class="empty-state">Unable to load mod registry.</div>';
         });
-    </script>
+    }
+
+    renderModList();
+
+    filePicker.addEventListener("click", async () => {
+        const paths = await window.api.selectModZip();
+        if (!paths) return;
+
+        for (const path of paths) {
+            await window.api.installModFromPath(path);
+            console.log("installed " + path);
+        }
+
+        renderModList();
+    });
+</script>
+
 </body>
 </html>
