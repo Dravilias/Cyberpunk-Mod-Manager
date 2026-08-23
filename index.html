@@ -6,11 +6,21 @@
     <title>Test</title>
 </head>
 <body>
+    <p id="errorLine"></p>
+    <button id="pathPicker">Choose the game path</button>
     <button id="filePicker">Choose mod zip archive</button>
     <ul id="modList"></ul>
     <script>
+        const errorLine = document.getElementById("errorLine");
+        const pathPicker = document.getElementById("pathPicker");
         const filePicker = document.getElementById("filePicker");
         const modList = document.getElementById("modList");
+
+        window.api.onmessage((message) => errorLine.innerHTML);
+
+        pathPicker.addEventListener("click", () => {
+            window.api.selectGamePath();
+        })
 
         function renderModList() {
             modList.innerHTML = "";
