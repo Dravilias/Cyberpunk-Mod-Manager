@@ -16,7 +16,7 @@
         const filePicker = document.getElementById("filePicker");
         const modList = document.getElementById("modList");
 
-        window.api.onmessage((message) => errorLine.innerHTML);
+        window.api.onmessage((message) => { errorLine.textContent = message; });
 
         pathPicker.addEventListener("click", () => {
             window.api.selectGamePath();

@@ -50,6 +50,7 @@ function getCleanPath(entryName, stripDepth) {
 
 function installMod(zipContents, stripDepth) {
     const gamePath = store.get('gamePath');
+    if (!gamePath) return [];
     let installedFiles = [];
 
     zipContents.forEach(entry => {
@@ -81,6 +82,8 @@ function readModRecords() {
 
 function deleteModRecord(modName) {
     const gamePath = store.get('gamePath');
+    if (!gamePath) return;
+
     const modRecords = readModRecords();
     const targetMod = modRecords.find(r => r.name === modName);
     if (!targetMod) return;
