@@ -1,0 +1,64 @@
+    body {
+        background: #0b0b10;
+        color: #e8e8e8;
+        font-family: system-ui, sans-serif;
+        margin: 0;
+        padding: 24px;
+    }
+
+    button {
+        background: #fcee0a;
+        color: #0b0b10;
+        border: none;
+        padding: 8px 14px;
+        font-weight: 600;
+        cursor: pointer;
+        border-radius: 3px;
+    }
+
+    button:hover:not(:disabled) {
+        background: #fff45c;
+    }
+
+    button:disabled {
+        background: #3a3a44;
+        color: #777;
+        cursor: not-allowed;
+    }
+
+    #gamePathLabel {
+        margin-left: 10px;
+        color: #8a8a96;
+        font-family: monospace;
+        font-size: 13px;
+    }
+
+    #filePicker {
+        margin-top: 14px;
+    }
+
+    #modList {
+        list-style: none;
+        padding: 0;
+        margin-top: 20px;
+    }
+
+    #modList li {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: #16161e;
+        border-left: 3px solid #fcee0a;
+        padding: 10px 14px;
+        margin-bottom: 8px;
+    }
+
+    #modList li button {
+        background: #ff3b5c;
+        color: #fff;
+        padding: 5px 10px;
+    }
+
+    #modList li button:hover {
+        background: #ff6680;
+    }

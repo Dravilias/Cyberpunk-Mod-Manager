@@ -4,13 +4,31 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Test</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <button id="gamePicker">Choose game folder</button>
+    <span id="gamePathLabel"></span>
+    <br>
     <button id="filePicker">Choose mod zip archive</button>
     <ul id="modList"></ul>
     <script>
+        const gamePicker = document.getElementById("gamePicker");
+        const gamePathLabel = document.getElementById("gamePathLabel");
         const filePicker = document.getElementById("filePicker");
         const modList = document.getElementById("modList");
+
+        async function renderGamePath() {
+            const p = await window.api.getGamePath();
+            gamePathLabel.textContent = p ? p : "not set";
+            filePicker.disabled = !p;
+        }
+        renderGamePath();
+
+        gamePicker.addEventListener("click", async () => {
+            await window.api.selectGamePath();
+            renderGamePath();
+        });
 
         function renderModList() {
             modList.innerHTML = "";
@@ -33,7 +51,6 @@
         }
         renderModList()
 
-        
         filePicker.addEventListener("click", async () => {
             const paths = await window.api.selectModZip();
             if (!paths) return;

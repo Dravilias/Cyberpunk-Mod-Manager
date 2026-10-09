@@ -4,5 +4,7 @@ contextBridge.exposeInMainWorld('api', {
     selectModZip: () => ipcRenderer.invoke('selectModZip'),
     installModFromPath: (zipPath) => ipcRenderer.invoke('installModFromPath', zipPath),
     getInstalledMods: () => ipcRenderer.invoke('getInstalledMods'),
-    deleteMod: (modName) => ipcRenderer.invoke('deleteMod', modName)
+    deleteMod: (modName) => ipcRenderer.invoke('deleteMod', modName),
+    getGamePath: () => ipcRenderer.invoke('getGamePath'),
+    selectGamePath: () => ipcRenderer.invoke('selectGamePath')
 });

@@ -2,9 +2,9 @@ const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const admZip = require('adm-zip');
 const fs = require('fs');
 const path = require('path');
+const Store = require('electron-store');
 
-const gamePath = "D:/SteamLibrary/steamapps/common/Cyberpunk 2077"; // temp till gui has a selector
-const modPath = "C:/Users/kubag/Documents/Mody Cyberpunk/Baseball Cap Fem and Masc-16699-1-0-1726904383.zip"; // temp till gui has a selector
+const store = new Store();
 const rootFolders = ["archive", "r6", "bin", "engine", "red4ext", "mods"];
 const modsDbPath = path.join(__dirname, 'mods.json');
 
@@ -96,6 +96,15 @@ function deleteModRecord(modName, gamePath) {
     fs.writeFileSync(modsDbPath, JSON.stringify(remainingMods, null, 2))
 }
 
+ipcMain.handle('getGamePath', () => store.get('gamePath', null));
+
+ipcMain.handle('selectGamePath', () => {
+    const result = dialog.showOpenDialogSync({ properties: ['openDirectory'] });
+    if (!result) return store.get('gamePath', null);
+    store.set('gamePath', result[0]);
+    return result[0];
+});
+
 ipcMain.handle('selectModZip', () => {
     const result = dialog.showOpenDialogSync({
         properties: ['openFile', 'multiSelections'],
@@ -108,6 +117,8 @@ ipcMain.handle('selectModZip', () => {
 })
 
 ipcMain.handle('installModFromPath', (event, zipPath) => {
+    const gamePath = store.get('gamePath');
+    if (!gamePath) return null;
     const zip = new admZip(zipPath);
     const zipContents = zip.getEntries();
     const stripDepth = getStripDepth(zipContents);
@@ -123,10 +134,11 @@ ipcMain.handle('getInstalledMods', () => {
 })
 
 ipcMain.handle('deleteMod', (event, modName) => {
+    const gamePath = store.get('gamePath');
+    if (!gamePath) return;
     deleteModRecord(modName, gamePath);
 });
 
 app.whenReady().then(() => {
     createWindow();
-    
 });
