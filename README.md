@@ -35,4 +35,3 @@ npm run dist:win     # Windows installer + portable exe, in dist/
 npm run dist:linux   # Linux AppImage + tar.gz, in dist/ (AppImage must be built on Linux)
 ```
 
-```
