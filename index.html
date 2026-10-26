@@ -10,11 +10,18 @@
     <button id="gamePicker">Choose game folder</button>
     <span id="gamePathLabel"></span>
     <br>
-    <button id="filePicker">Choose mod zip archive</button>
+    <button id="filePicker">Choose mod archive (.zip, .7z, .rar)</button>
     <div id="installProgress" hidden>
         <div id="installLabel"></div>
         <div class="progressTrack"><div id="installBar"></div></div>
     </div>
+    <div id="installErrors"></div>
+    <div id="updatePanel">
+        <input id="nexusApiKey" type="password" placeholder="Nexus API key">
+        <button id="saveApiKey">Save key</button>
+        <button id="checkUpdates">Check for updates</button>
+    </div>
+    <div id="updateStatus"></div>
     <input id="modSearch" type="search" placeholder="Search installed mods...">
     <ul id="modList"></ul>
     <div id="emptyMessage" hidden></div>
@@ -28,6 +35,11 @@
         const installProgress = document.getElementById("installProgress");
         const installLabel = document.getElementById("installLabel");
         const installBar = document.getElementById("installBar");
+        const installErrors = document.getElementById("installErrors");
+        const nexusApiKey = document.getElementById("nexusApiKey");
+        const saveApiKey = document.getElementById("saveApiKey");
+        const checkUpdates = document.getElementById("checkUpdates");
+        const updateStatus = document.getElementById("updateStatus");
 
         async function renderGamePath() {
             const p = await window.api.getGamePath();
@@ -42,6 +54,39 @@
         });
 
         let installedMods = [];
+        let modUpdates = {};
+
+        window.api.getNexusApiKey().then(key => {
+            nexusApiKey.value = key;
+        });
+
+        saveApiKey.addEventListener("click", async () => {
+            await window.api.setNexusApiKey(nexusApiKey.value);
+            updateStatus.textContent = nexusApiKey.value.trim() ? "API key saved." : "API key cleared.";
+        });
+
+        checkUpdates.addEventListener("click", async () => {
+            checkUpdates.disabled = true;
+            updateStatus.textContent = "Checking Nexus for updates...";
+            const result = await window.api.checkModUpdates();
+            checkUpdates.disabled = false;
+
+            if (result.error) {
+                updateStatus.textContent = result.error;
+                return;
+            }
+            modUpdates = result.updates;
+            const count = Object.keys(modUpdates).length;
+            const untracked = installedMods.length - result.checked;
+            let message = count === 0
+                ? `All ${result.checked} tracked mods are up to date.`
+                : `${count} of ${result.checked} tracked mods have updates.`;
+            if (untracked > 0) {
+                message += ` ${untracked} mods aren't tracked (installed before update checks, or not a Nexus download).`;
+            }
+            updateStatus.textContent = message;
+            filterModList();
+        });
 
         async function renderModList() {
             installedMods = await window.api.getInstalledMods();
@@ -61,6 +106,21 @@
                 const name = document.createElement("span");
                 name.className = "modName";
                 name.textContent = record.name;
+                if (record.nexus) {
+                    const version = document.createElement("span");
+                    version.className = "modVersion";
+                    version.textContent = "v" + record.nexus.version;
+                    name.appendChild(version);
+                }
+                const update = modUpdates[record.name];
+                if (update) {
+                    const badge = document.createElement("button");
+                    badge.className = "updateBadge";
+                    badge.textContent = update.version ? `Update: v${update.version}` : "Update available";
+                    badge.title = "Open the mod's files page on Nexus";
+                    badge.addEventListener("click", () => window.api.openModPage(record.name));
+                    name.appendChild(badge);
+                }
                 li.appendChild(name);
 
                 const actions = document.createElement("div");
@@ -103,7 +163,13 @@
         renderModList()
 
         let currentModLabel = "";
-        window.api.onInstallProgress(({ done, total, percent }) => {
+        window.api.onInstallProgress(({ done, total, percent, extracting }) => {
+            installBar.classList.toggle("extracting", !!extracting);
+            if (extracting) {
+                installBar.style.width = "100%";
+                installLabel.textContent = `${currentModLabel} — extracting...`;
+                return;
+            }
             installBar.style.width = percent + "%";
             installLabel.textContent = `${currentModLabel} — ${done}/${total} files (${percent}%)`;
         });
@@ -115,15 +181,25 @@
             filePicker.disabled = true;
             gamePicker.disabled = true;
             installProgress.hidden = false;
+            installErrors.replaceChildren();
 
             try {
                 for (let i = 0; i < paths.length; i++) {
                     const name = paths[i].split(/[\\/]/).pop();
                     currentModLabel = `Installing ${name} (${i + 1}/${paths.length})`;
                     installLabel.textContent = currentModLabel;
+                    installBar.classList.remove("extracting");
                     installBar.style.width = "0%";
-                    await window.api.installModFromPath(paths[i]);
-                    console.log("installed " + paths[i]);
+                    try {
+                        await window.api.installModFromPath(paths[i]);
+                        console.log("installed " + paths[i]);
+                    } catch (error) {
+                        // Electron prefixes the message with "Error invoking remote method ...: Error: ".
+                        const message = error.message.replace(/^.*?Error: /, "");
+                        const line = document.createElement("div");
+                        line.textContent = `Couldn't install ${name}: ${message}`;
+                        installErrors.appendChild(line);
+                    }
                 }
             } finally {
                 installProgress.hidden = true;

@@ -1,7 +1,9 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const admZip = require('adm-zip');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
+const { Worker } = require('worker_threads');
 const Store = require('electron-store');
 
 // Keep the data folder from before productName was set, so the saved game path survives.
@@ -11,6 +13,7 @@ const store = new Store();
 const rootFolders = ["archive", "r6", "bin", "engine", "red4ext", "mods"];
 const modsDbPath = path.join(app.getPath('userData'), 'mods.json');
 const disabledFolderName = '.cmm-disabled';
+const nexusGame = 'cyberpunk2077';
 
 // mods.json used to live next to the source; carry it over on first run.
 const legacyModsDbPath = path.join(__dirname, 'mods.json');
@@ -49,6 +52,49 @@ function getCleanPath(entryName, stripDepth) {
     return entryName.split('/').slice(stripDepth).join('/')
 }
 
+function extractWithSevenZip(archivePath, outputPath) {
+    return new Promise((resolve, reject) => {
+        const worker = new Worker(path.join(__dirname, 'extractWorker.js'), {
+            workerData: { archivePath, outputPath }
+        });
+        worker.once('message', result => result.ok ? resolve() : reject(new Error(result.error)));
+        worker.once('error', reject);
+        worker.once('exit', code => reject(new Error(`Extraction stopped unexpectedly (code ${code}).`)));
+    });
+}
+
+function listFilesRecursive(folder) {
+    return fs.readdirSync(folder, { withFileTypes: true }).flatMap(item => {
+        const fullPath = path.join(folder, item.name);
+        return item.isDirectory() ? listFilesRecursive(fullPath) : [fullPath];
+    });
+}
+
+// Returns { entries, cleanup } where entries look like adm-zip entries
+// ({ entryName, isDirectory, getData() }), whatever the archive format.
+async function openArchive(archivePath, onExtracting) {
+    if (path.extname(archivePath).toLowerCase() === '.zip') {
+        return { entries: new admZip(archivePath).getEntries(), cleanup: () => {} };
+    }
+
+    // .7z and .rar are unpacked to a temp folder first, then installed like a zip.
+    onExtracting();
+    const tempPath = fs.mkdtempSync(path.join(os.tmpdir(), 'cmm-extract-'));
+    const cleanup = () => fs.rmSync(tempPath, { recursive: true, force: true });
+    try {
+        await extractWithSevenZip(archivePath, tempPath);
+    } catch (error) {
+        cleanup();
+        throw error;
+    }
+    const entries = listFilesRecursive(tempPath).map(fullPath => ({
+        entryName: path.relative(tempPath, fullPath).split(path.sep).join('/'),
+        isDirectory: false,
+        getData: () => fs.readFileSync(fullPath)
+    }));
+    return { entries, cleanup };
+}
+
 async function installMod(zipContents, stripDepth, gamePath, onProgress) {
     let installedFiles = [];
     const files = zipContents.filter(entry => !entry.isDirectory);
@@ -75,13 +121,28 @@ function writeModRecords(records) {
     fs.writeFileSync(modsDbPath, JSON.stringify(records, null, 2))
 }
 
-function saveModRecord(modName, installedFiles) {
+// Nexus downloads are named "<name>-<mod id>-<version>-<upload timestamp>",
+// e.g. "ArchiveXL-4198-1-21-0-1735000000" for version 1.21.0.
+function parseNexusFileName(rawName) {
+    const match = rawName.match(/^(.+?)-(\d+)-(.+)-(\d{9,11})$/);
+    if (!match) return null;
+    return {
+        modId: Number(match[2]),
+        version: match[3].replace(/-/g, '.'),
+        uploadedTimestamp: Number(match[4])
+    };
+}
+
+function saveModRecord(modName, installedFiles, nexusInfo) {
     const json = readModRecords();
     const record = {
         name: modName,
         installDate: new Date().toISOString(),
         enabled: true,
         files: installedFiles 
+    }
+    if (nexusInfo) {
+        record.nexus = nexusInfo;
     }
     json.push(record);
     writeModRecords(json);
@@ -157,6 +218,91 @@ function setModEnabled(modName, gamePath, enabled) {
     writeModRecords(modRecords);
 }
 
+function getNexusModUrl(modId) {
+    return `https://www.nexusmods.com/${nexusGame}/mods/${modId}?tab=files`;
+}
+
+async function fetchNexusModFiles(modId, apiKey) {
+    const response = await fetch(`https://api.nexusmods.com/v1/games/${nexusGame}/mods/${modId}/files.json`, {
+        headers: {
+            'apikey': apiKey,
+            'Application-Name': 'Cyberpunk Mod Manager',
+            'Application-Version': app.getVersion()
+        }
+    });
+    if (response.status === 401) throw new Error('Nexus rejected the API key.');
+    if (response.status === 429) throw new Error('Nexus rate limit reached, try again later.');
+    if (response.status === 404) return null; // mod removed or hidden
+    if (!response.ok) throw new Error(`Nexus returned ${response.status}.`);
+    return response.json();
+}
+
+// Returns the newer file that replaced the installed one, or null if it is current.
+function findNewerFile(nexusFiles, nexusInfo) {
+    const installedFile = nexusFiles.files.find(file => file.uploaded_timestamp === nexusInfo.uploadedTimestamp);
+    if (!installedFile) return null;
+
+    // Nexus records "old file -> new file" whenever an author uploads an update; follow the chain.
+    let current = installedFile;
+    const seen = new Set();
+    while (!seen.has(current.file_id)) {
+        seen.add(current.file_id);
+        const update = nexusFiles.file_updates.find(u => u.old_file_id === current.file_id);
+        const next = update && nexusFiles.files.find(file => file.file_id === update.new_file_id);
+        if (!next) break;
+        current = next;
+    }
+    if (current !== installedFile) return current;
+
+    // Author archived the file without linking a replacement; point at the newest main file.
+    if (['OLD_VERSION', 'ARCHIVED'].includes(installedFile.category_name)) {
+        const mainFiles = nexusFiles.files.filter(file => file.category_name === 'MAIN');
+        mainFiles.sort((a, b) => b.uploaded_timestamp - a.uploaded_timestamp);
+        return mainFiles[0] || installedFile;
+    }
+    return null;
+}
+
+async function checkModUpdates(apiKey) {
+    const trackedMods = readModRecords().filter(record => record.nexus);
+    const updates = {};
+    for (const record of trackedMods) {
+        const nexusFiles = await fetchNexusModFiles(record.nexus.modId, apiKey);
+        if (!nexusFiles) continue;
+        const newerFile = findNewerFile(nexusFiles, record.nexus);
+        if (newerFile) {
+            updates[record.name] = {
+                version: newerFile.version || null,
+                url: getNexusModUrl(record.nexus.modId)
+            };
+        }
+    }
+    return { checked: trackedMods.length, updates };
+}
+
+ipcMain.handle('getNexusApiKey', () => store.get('nexusApiKey', ''));
+
+ipcMain.handle('setNexusApiKey', (event, apiKey) => {
+    store.set('nexusApiKey', apiKey.trim());
+});
+
+ipcMain.handle('checkModUpdates', async () => {
+    const apiKey = store.get('nexusApiKey', '');
+    if (!apiKey) return { error: 'Add your Nexus API key first.' };
+    try {
+        return await checkModUpdates(apiKey);
+    } catch (error) {
+        return { error: error.message };
+    }
+});
+
+ipcMain.handle('openModPage', (event, modName) => {
+    const record = readModRecords().find(modRecord => modRecord.name === modName);
+    if (record && record.nexus) {
+        shell.openExternal(getNexusModUrl(record.nexus.modId));
+    }
+});
+
 ipcMain.handle('getGamePath', () => store.get('gamePath', null));
 
 ipcMain.handle('selectGamePath', () => {
@@ -169,7 +315,7 @@ ipcMain.handle('selectGamePath', () => {
 ipcMain.handle('selectModZip', () => {
     const result = dialog.showOpenDialogSync({
         properties: ['openFile', 'multiSelections'],
-        filters: [{ name: 'Zip Archives', extensions: ['zip'] }]
+        filters: [{ name: 'Mod Archives', extensions: ['zip', '7z', 'rar'] }]
     });
     if (!result) {
         return null
@@ -180,19 +326,25 @@ ipcMain.handle('selectModZip', () => {
 ipcMain.handle('installModFromPath', async (event, zipPath) => {
     const gamePath = store.get('gamePath');
     if (!gamePath) return null;
-    const zip = new admZip(zipPath);
-    const zipContents = zip.getEntries();
-    const stripDepth = getStripDepth(zipContents);
-    let lastPercent = -1;
-    const installedFiles = await installMod(zipContents, stripDepth, gamePath, (done, total) => {
-        const percent = Math.floor(done / total * 100);
-        if (percent === lastPercent) return;
-        lastPercent = percent;
-        event.sender.send('installProgress', { done, total, percent });
+    const archive = await openArchive(zipPath, () => {
+        event.sender.send('installProgress', { extracting: true });
     });
-    const rawName = path.basename(zipPath, '.zip')
+    let installedFiles;
+    try {
+        const stripDepth = getStripDepth(archive.entries);
+        let lastPercent = -1;
+        installedFiles = await installMod(archive.entries, stripDepth, gamePath, (done, total) => {
+            const percent = Math.floor(done / total * 100);
+            if (percent === lastPercent) return;
+            lastPercent = percent;
+            event.sender.send('installProgress', { done, total, percent });
+        });
+    } finally {
+        archive.cleanup();
+    }
+    const rawName = path.basename(zipPath, path.extname(zipPath))
     const cleanName = rawName.replace(/-\d.*$/, '')
-    saveModRecord(cleanName, installedFiles);
+    saveModRecord(cleanName, installedFiles, parseNexusFileName(rawName));
     return cleanName;
 })
 
