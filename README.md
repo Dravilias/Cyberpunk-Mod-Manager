@@ -1,7 +1,5 @@
 # Cyberpunk Mod Manager
 
-this works ui is for nerds
-
 A small Electron app for installing Cyberpunk 2077 mods from `.zip` archives.
 
 - Install one or more mod zips at once, with a progress bar
@@ -37,9 +35,4 @@ npm run dist:win     # Windows installer + portable exe, in dist/
 npm run dist:linux   # Linux AppImage + tar.gz, in dist/ (AppImage must be built on Linux)
 ```
 
-Pushing a version tag builds both platforms on GitHub Actions and attaches them to a release:
-
-```sh
-git tag v1.0.0
-git push origin v1.0.0
 ```
