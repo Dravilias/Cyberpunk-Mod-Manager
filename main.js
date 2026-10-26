@@ -133,19 +133,47 @@ function parseNexusFileName(rawName) {
     };
 }
 
-function saveModRecord(modName, installedFiles, nexusInfo) {
+// Reinstalling a mod replaces its record, so each name appears once.
+function saveModRecord(modName, installedFiles, nexusInfo, enabled) {
     const json = readModRecords();
     const record = {
         name: modName,
         installDate: new Date().toISOString(),
-        enabled: true,
-        files: installedFiles 
+        enabled: enabled,
+        files: installedFiles
     }
     if (nexusInfo) {
         record.nexus = nexusInfo;
     }
-    json.push(record);
+    const existingIndex = json.findIndex(modRecord => modRecord.name === modName);
+    if (existingIndex === -1) {
+        json.push(record);
+    } else {
+        json[existingIndex] = record;
+    }
     writeModRecords(json);
+}
+
+// Finds the installed mod a new archive replaces. Two Nexus mods with different ids that
+// happen to share a name are different mods, so the new one gets "Name (2)" instead.
+function findModToReplace(modRecords, modName, nexusInfo) {
+    let candidate = modName;
+    for (let n = 2; ; n++) {
+        const existing = modRecords.find(modRecord => modRecord.name === candidate);
+        if (!existing) return { existing: null, name: candidate };
+        const differentNexusMod = existing.nexus && nexusInfo && existing.nexus.modId !== nexusInfo.modId;
+        if (!differentNexusMod) return { existing, name: candidate };
+        candidate = `${modName} (${n})`;
+    }
+}
+
+function removeFiles(root, files) {
+    files.forEach(file => {
+        const fullPath = path.join(root, file);
+        if (fs.existsSync(fullPath)) {
+            fs.unlinkSync(fullPath);
+        }
+    });
 }
 
 function readModRecords() {
@@ -326,6 +354,27 @@ ipcMain.handle('selectModZip', () => {
 ipcMain.handle('installModFromPath', async (event, zipPath) => {
     const gamePath = store.get('gamePath');
     if (!gamePath) return null;
+    const rawName = path.basename(zipPath, path.extname(zipPath))
+    const cleanName = rawName.replace(/-\d.*$/, '')
+    const nexusInfo = parseNexusFileName(rawName);
+    const { existing, name } = findModToReplace(readModRecords(), cleanName, nexusInfo);
+
+    let keepDisabled = false;
+    if (existing && !isEnabled(existing)) {
+        const { response } = await dialog.showMessageBox(BrowserWindow.fromWebContents(event.sender), {
+            type: 'question',
+            buttons: ['Enable it', 'Keep it disabled'],
+            defaultId: 0,
+            cancelId: 1,
+            message: `"${name}" is currently disabled.`,
+            detail: 'Should the new version be enabled, or installed but kept disabled?'
+        });
+        keepDisabled = response === 1;
+    }
+    const disabledPath = getDisabledModPath(gamePath, name);
+    // A mod that stays disabled is installed straight into its disabled storage folder.
+    const installRoot = keepDisabled ? disabledPath : gamePath;
+
     const archive = await openArchive(zipPath, () => {
         event.sender.send('installProgress', { extracting: true });
     });
@@ -333,7 +382,7 @@ ipcMain.handle('installModFromPath', async (event, zipPath) => {
     try {
         const stripDepth = getStripDepth(archive.entries);
         let lastPercent = -1;
-        installedFiles = await installMod(archive.entries, stripDepth, gamePath, (done, total) => {
+        installedFiles = await installMod(archive.entries, stripDepth, installRoot, (done, total) => {
             const percent = Math.floor(done / total * 100);
             if (percent === lastPercent) return;
             lastPercent = percent;
@@ -342,10 +391,20 @@ ipcMain.handle('installModFromPath', async (event, zipPath) => {
     } finally {
         archive.cleanup();
     }
-    const rawName = path.basename(zipPath, path.extname(zipPath))
-    const cleanName = rawName.replace(/-\d.*$/, '')
-    saveModRecord(cleanName, installedFiles, parseNexusFileName(rawName));
-    return cleanName;
+
+    // Clean up whatever the previous version left that the new one no longer ships.
+    if (existing) {
+        const staleFiles = existing.files.filter(file => !installedFiles.includes(file));
+        if (isEnabled(existing)) {
+            removeFiles(gamePath, staleFiles);
+        } else if (keepDisabled) {
+            removeFiles(disabledPath, staleFiles);
+        } else {
+            fs.rmSync(disabledPath, { recursive: true, force: true });
+        }
+    }
+    saveModRecord(name, installedFiles, nexusInfo, !keepDisabled);
+    return name;
 })
 
 ipcMain.handle('getInstalledMods', () => {

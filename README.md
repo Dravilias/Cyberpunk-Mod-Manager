@@ -3,6 +3,7 @@
 A small Electron app for installing Cyberpunk 2077 mods from `.zip`, `.7z` and `.rar` archives.
 
 - Install one or more mod archives (.zip, .7z, .rar) at once, with a progress bar
+- Reinstalling a mod (e.g. a newer version) replaces it instead of adding a duplicate
 - Search your installed mods
 - Disable a mod without deleting it (its files are moved into `.cmm-disabled/` in the game folder) and enable it again later
 - Delete mods, removing every file they installed
