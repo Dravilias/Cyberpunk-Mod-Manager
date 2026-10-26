@@ -4,14 +4,28 @@ const fs = require('fs');
 const path = require('path');
 const Store = require('electron-store');
 
+// Keep the data folder from before productName was set, so the saved game path survives.
+app.setPath('userData', path.join(app.getPath('appData'), 'cyberpunk-mod-manager'));
+
 const store = new Store();
 const rootFolders = ["archive", "r6", "bin", "engine", "red4ext", "mods"];
-const modsDbPath = path.join(__dirname, 'mods.json');
+const modsDbPath = path.join(app.getPath('userData'), 'mods.json');
+const disabledFolderName = '.cmm-disabled';
+
+// mods.json used to live next to the source; carry it over on first run.
+const legacyModsDbPath = path.join(__dirname, 'mods.json');
+if (!fs.existsSync(modsDbPath) && fs.existsSync(legacyModsDbPath)) {
+    fs.mkdirSync(path.dirname(modsDbPath), { recursive: true });
+    fs.copyFileSync(legacyModsDbPath, modsDbPath);
+}
 
 function createWindow() {
     const win = new BrowserWindow({
         width: 800,
         height: 800,
+        title: 'Cyberpunk Mod Manager',
+        autoHideMenuBar: true,
+        icon: path.join(__dirname, 'assets', 'icon.png'),
         webPreferences: {
             preload: path.join(__dirname, 'preload.js')
         }
@@ -35,40 +49,42 @@ function getCleanPath(entryName, stripDepth) {
     return entryName.split('/').slice(stripDepth).join('/')
 }
 
-function installMod(zipContents, stripDepth, gamePath) {
+async function installMod(zipContents, stripDepth, gamePath, onProgress) {
     let installedFiles = [];
+    const files = zipContents.filter(entry => !entry.isDirectory);
+    let done = 0;
 
-    zipContents.forEach(entry => {
-        if (entry.isDirectory) {
-            return
-        }
+    for (const entry of files) {
         const cleanPath = getCleanPath(entry.entryName, stripDepth);
-        if (cleanPath.length == 0) {
-            return
+        if (cleanPath.length > 0) {
+            const finalPath = gamePath + '/' + cleanPath;
+            const folder = path.dirname(finalPath);
+            await fs.promises.mkdir(folder, { recursive: true });
+            const fileData = entry.getData();
+            await fs.promises.writeFile(finalPath, fileData);
+            installedFiles.push(cleanPath);
         }
-        const finalPath = gamePath + '/' + cleanPath;
-        const folder = path.dirname(finalPath);
-        fs.mkdirSync(folder, { recursive: true }); 
-        const fileData = entry.getData();
-        fs.writeFileSync(finalPath, fileData);
-        installedFiles.push(cleanPath);
-    });
+        done++;
+        onProgress(done, files.length);
+    }
     return installedFiles;
 }
 
+function writeModRecords(records) {
+    fs.mkdirSync(path.dirname(modsDbPath), { recursive: true });
+    fs.writeFileSync(modsDbPath, JSON.stringify(records, null, 2))
+}
+
 function saveModRecord(modName, installedFiles) {
-    if (!fs.existsSync(modsDbPath)) {
-        fs.writeFileSync(modsDbPath, '[]');
-    }
-    const rawText = fs.readFileSync(modsDbPath, 'utf-8');
-    const json = JSON.parse(rawText);
+    const json = readModRecords();
     const record = {
         name: modName,
         installDate: new Date().toISOString(),
+        enabled: true,
         files: installedFiles 
     }
     json.push(record);
-    fs.writeFileSync(modsDbPath, JSON.stringify(json, null, 2))
+    writeModRecords(json);
 }
 
 function readModRecords() {
@@ -80,20 +96,65 @@ function readModRecords() {
     return json;
 }
 
+function isEnabled(modRecord) {
+    // Records saved before disabling existed have no flag and are enabled.
+    return modRecord.enabled !== false;
+}
+
+function getDisabledModPath(gamePath, modName) {
+    return path.join(gamePath, disabledFolderName, modName);
+}
+
 function deleteModRecord(modName, gamePath) {
     const modRecords = readModRecords();
     const targetMod = modRecords.find(modRecord => modRecord.name === modName);
     if (targetMod == null) {
         return 
     }
+    if (isEnabled(targetMod)) {
+        targetMod.files.forEach(file => {
+            const fullPath = gamePath + '/' + file;
+            if (fs.existsSync(fullPath)) {
+                fs.unlinkSync(fullPath);
+            }
+        });
+    } else {
+        fs.rmSync(getDisabledModPath(gamePath, modName), { recursive: true, force: true });
+    }
+    const remainingMods = modRecords.filter(modRecord => modRecord.name !== modName);
+    writeModRecords(remainingMods);
+}
+
+function moveFile(from, to) {
+    if (!fs.existsSync(from)) {
+        return
+    }
+    fs.mkdirSync(path.dirname(to), { recursive: true });
+    fs.renameSync(from, to);
+}
+
+function setModEnabled(modName, gamePath, enabled) {
+    const modRecords = readModRecords();
+    const targetMod = modRecords.find(modRecord => modRecord.name === modName);
+    if (targetMod == null || isEnabled(targetMod) === enabled) {
+        return
+    }
+    const disabledPath = getDisabledModPath(gamePath, modName);
     targetMod.files.forEach(file => {
-        const fullPath = gamePath + '/' + file;
-        if (fs.existsSync(fullPath)) {
-            fs.unlinkSync(fullPath);
+        const livePath = path.join(gamePath, file);
+        const storedPath = path.join(disabledPath, file);
+        if (enabled) {
+            moveFile(storedPath, livePath);
+        } else {
+            moveFile(livePath, storedPath);
         }
     });
-    const remainingMods = modRecords.filter(modRecord => modRecord.name !== modName);
-    fs.writeFileSync(modsDbPath, JSON.stringify(remainingMods, null, 2))
+    if (enabled) {
+        // Only empty folders are left behind at this point.
+        fs.rmSync(disabledPath, { recursive: true, force: true });
+    }
+    targetMod.enabled = enabled;
+    writeModRecords(modRecords);
 }
 
 ipcMain.handle('getGamePath', () => store.get('gamePath', null));
@@ -116,13 +177,19 @@ ipcMain.handle('selectModZip', () => {
     return result;
 })
 
-ipcMain.handle('installModFromPath', (event, zipPath) => {
+ipcMain.handle('installModFromPath', async (event, zipPath) => {
     const gamePath = store.get('gamePath');
     if (!gamePath) return null;
     const zip = new admZip(zipPath);
     const zipContents = zip.getEntries();
     const stripDepth = getStripDepth(zipContents);
-    const installedFiles = installMod(zipContents, stripDepth, gamePath);
+    let lastPercent = -1;
+    const installedFiles = await installMod(zipContents, stripDepth, gamePath, (done, total) => {
+        const percent = Math.floor(done / total * 100);
+        if (percent === lastPercent) return;
+        lastPercent = percent;
+        event.sender.send('installProgress', { done, total, percent });
+    });
     const rawName = path.basename(zipPath, '.zip')
     const cleanName = rawName.replace(/-\d.*$/, '')
     saveModRecord(cleanName, installedFiles);
@@ -137,6 +204,12 @@ ipcMain.handle('deleteMod', (event, modName) => {
     const gamePath = store.get('gamePath');
     if (!gamePath) return;
     deleteModRecord(modName, gamePath);
+});
+
+ipcMain.handle('setModEnabled', (event, modName, enabled) => {
+    const gamePath = store.get('gamePath');
+    if (!gamePath) return;
+    setModEnabled(modName, gamePath, enabled);
 });
 
 app.whenReady().then(() => {

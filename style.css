@@ -40,7 +40,7 @@
     #modList {
         list-style: none;
         padding: 0;
-        margin-top: 20px;
+        margin-top: 12px;
     }
 
     #modList li {
@@ -53,12 +53,101 @@
         margin-bottom: 8px;
     }
 
+    #modList li.disabled {
+        border-left-color: #3a3a44;
+    }
+
+    #modList li.disabled .modName {
+        color: #6a6a76;
+        text-decoration: line-through;
+    }
+
+    .modActions {
+        display: flex;
+        gap: 6px;
+        flex-shrink: 0;
+        margin-left: 12px;
+    }
+
     #modList li button {
-        background: #ff3b5c;
-        color: #fff;
         padding: 5px 10px;
     }
 
-    #modList li button:hover {
+    #modList li .toggleButton {
+        background: #2a2a34;
+        color: #e8e8e8;
+    }
+
+    #modList li .toggleButton:hover {
+        background: #3a3a44;
+    }
+
+    #modList li.disabled .toggleButton {
+        background: #fcee0a;
+        color: #0b0b10;
+    }
+
+    #modList li.disabled .toggleButton:hover {
+        background: #fff45c;
+    }
+
+    #modList li .deleteButton {
+        background: #ff3b5c;
+        color: #fff;
+    }
+
+    #modList li .deleteButton:hover {
         background: #ff6680;
+    }
+    #installProgress {
+        margin-top: 16px;
+    }
+
+    #installLabel {
+        font-size: 13px;
+        color: #8a8a96;
+        margin-bottom: 6px;
+    }
+
+    .progressTrack {
+        height: 8px;
+        background: #16161e;
+        border-radius: 3px;
+        overflow: hidden;
+    }
+
+    #installBar {
+        width: 0%;
+        height: 100%;
+        background: #fcee0a;
+        transition: width 0.1s linear;
+    }
+
+    #modSearch {
+        display: block;
+        width: 100%;
+        box-sizing: border-box;
+        margin-top: 20px;
+        padding: 8px 12px;
+        background: #16161e;
+        color: #e8e8e8;
+        border: 1px solid #3a3a44;
+        border-radius: 3px;
+        font: inherit;
+        font-size: 14px;
+    }
+
+    #modSearch:focus {
+        outline: none;
+        border-color: #fcee0a;
+    }
+
+    #modSearch::placeholder {
+        color: #6a6a76;
+    }
+
+    #emptyMessage {
+        color: #8a8a96;
+        font-size: 13px;
+        padding: 10px 0;
     }

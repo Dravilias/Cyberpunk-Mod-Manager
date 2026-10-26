@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Test</title>
+    <title>Cyberpunk Mod Manager</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -11,12 +11,23 @@
     <span id="gamePathLabel"></span>
     <br>
     <button id="filePicker">Choose mod zip archive</button>
+    <div id="installProgress" hidden>
+        <div id="installLabel"></div>
+        <div class="progressTrack"><div id="installBar"></div></div>
+    </div>
+    <input id="modSearch" type="search" placeholder="Search installed mods...">
     <ul id="modList"></ul>
+    <div id="emptyMessage" hidden></div>
     <script>
         const gamePicker = document.getElementById("gamePicker");
         const gamePathLabel = document.getElementById("gamePathLabel");
         const filePicker = document.getElementById("filePicker");
         const modList = document.getElementById("modList");
+        const modSearch = document.getElementById("modSearch");
+        const emptyMessage = document.getElementById("emptyMessage");
+        const installProgress = document.getElementById("installProgress");
+        const installLabel = document.getElementById("installLabel");
+        const installBar = document.getElementById("installBar");
 
         async function renderGamePath() {
             const p = await window.api.getGamePath();
@@ -30,37 +41,96 @@
             renderGamePath();
         });
 
-        function renderModList() {
-            modList.innerHTML = "";
-            window.api.getInstalledMods().then( records => 
-                records.forEach(record => {
-                    const li = document.createElement("li")
-                    li.textContent = record.name + " ";
-                    const button = document.createElement("button");
-                    button.textContent = "Delete";
-                    button.addEventListener("click", () => {
-                        console.log("button clicked for", record.name);
-                        window.api.deleteMod(record.name).then(() => {
-                            renderModList()
-                        })
-                    })
-                    li.appendChild(button);
-                    modList.appendChild(li)
-                })
-            )
+        let installedMods = [];
+
+        async function renderModList() {
+            installedMods = await window.api.getInstalledMods();
+            filterModList();
         }
+
+        function filterModList() {
+            const query = modSearch.value.trim().toLowerCase();
+            const matches = installedMods.filter(record => record.name.toLowerCase().includes(query));
+
+            modList.innerHTML = "";
+            matches.forEach(record => {
+                const enabled = record.enabled !== false;
+                const li = document.createElement("li")
+                li.classList.toggle("disabled", !enabled);
+
+                const name = document.createElement("span");
+                name.className = "modName";
+                name.textContent = record.name;
+                li.appendChild(name);
+
+                const actions = document.createElement("div");
+                actions.className = "modActions";
+
+                const toggleButton = document.createElement("button");
+                toggleButton.className = "toggleButton";
+                toggleButton.textContent = enabled ? "Disable" : "Enable";
+                toggleButton.addEventListener("click", () => {
+                    window.api.setModEnabled(record.name, !enabled).then(() => {
+                        renderModList()
+                    })
+                })
+                actions.appendChild(toggleButton);
+
+                const button = document.createElement("button");
+                button.className = "deleteButton";
+                button.textContent = "Delete";
+                button.addEventListener("click", () => {
+                    console.log("button clicked for", record.name);
+                    window.api.deleteMod(record.name).then(() => {
+                        renderModList()
+                    })
+                })
+                actions.appendChild(button);
+
+                li.appendChild(actions);
+                modList.appendChild(li)
+            });
+
+            if (installedMods.length === 0) {
+                emptyMessage.textContent = "No mods installed yet.";
+            } else if (matches.length === 0) {
+                emptyMessage.textContent = `No mods match "${modSearch.value.trim()}".`;
+            }
+            emptyMessage.hidden = matches.length > 0;
+        }
+
+        modSearch.addEventListener("input", filterModList);
         renderModList()
+
+        let currentModLabel = "";
+        window.api.onInstallProgress(({ done, total, percent }) => {
+            installBar.style.width = percent + "%";
+            installLabel.textContent = `${currentModLabel} — ${done}/${total} files (${percent}%)`;
+        });
 
         filePicker.addEventListener("click", async () => {
             const paths = await window.api.selectModZip();
             if (!paths) return;
 
-            for (const path of paths) {
-                await window.api.installModFromPath(path);
-                console.log("installed " + path);
-            }
+            filePicker.disabled = true;
+            gamePicker.disabled = true;
+            installProgress.hidden = false;
 
-            renderModList();
+            try {
+                for (let i = 0; i < paths.length; i++) {
+                    const name = paths[i].split(/[\\/]/).pop();
+                    currentModLabel = `Installing ${name} (${i + 1}/${paths.length})`;
+                    installLabel.textContent = currentModLabel;
+                    installBar.style.width = "0%";
+                    await window.api.installModFromPath(paths[i]);
+                    console.log("installed " + paths[i]);
+                }
+            } finally {
+                installProgress.hidden = true;
+                gamePicker.disabled = false;
+                renderGamePath();
+                renderModList();
+            }
         });
     </script>
 </body>
